@@ -1,7 +1,7 @@
 import requests
-from requests.exceptions import HTTPError
 from bs4 import BeautifulSoup
 from loguru import logger
+
 
 URL = "https://habr.com/ru/articles/top/daily/"
 
@@ -9,7 +9,7 @@ ARTICLE_CLASS = "tm-articles-list__item"
 TITLE_CLASS = "tm-title__link"
 VIEWS_CLASS = "tm-icon-counter__value"
 
-headers = {
+HEADERS = {
     "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
@@ -17,14 +17,19 @@ headers = {
 
 def fetch_content(url: str) -> str | None:
     try:
-        response = requests.get(url, headers=headers, timeout=(3, 10))
+        response = requests.get(url, headers=HEADERS, timeout=(3, 10))
         response.raise_for_status()
         return response.text
-    except HTTPError as http_err:
-        print(f"HTTP error occurred: {http_err}")
+    except requests.exceptions.HTTPError as http_err:
+        logger.error(f"Ошибка запроса: {http_err}")
+    except requests.exceptions.Timeout:
+        logger.error("Сервер не ответил вовремя.")
+    except requests.exceptions.ConnectionError:
+        logger.error("Не удалось подключиться к серверу.")
+    return None
 
 
-def parse_articles(html: str):
+def parse_articles(html: str) -> list[dict]:
     soup = BeautifulSoup(html, "lxml")
     articles_cards = soup.find_all(class_=ARTICLE_CLASS)
 
@@ -42,6 +47,7 @@ def parse_articles(html: str):
             "views": views.get_text(strip=True)
         })
 
+    logger.info(f"Найдено статей: {len(articles)}")
     return articles
 
 
@@ -52,6 +58,9 @@ def print_articles(articles: list[dict]):
 
 def main():
     html = fetch_content(URL)
+    if html is None:
+        logger.error("Не удалось получить HTML, завершение работы.")
+        return
     articles = parse_articles(html)
     print_articles(articles)
 
